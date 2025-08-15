@@ -1,0 +1,15 @@
+name: AI Audit Pipeline
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Audit
+        run: echo "Audit pipeline configured"

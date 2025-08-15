@@ -1,0 +1,13 @@
+name: Sync from Main Repo
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync Status
+        run: echo "Sync configured - manual setup required"
