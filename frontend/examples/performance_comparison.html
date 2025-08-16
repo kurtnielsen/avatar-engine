@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Comparison - Optimized vs Standard</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        
+        #container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .viewer {
+            width: 50%;
+            height: 100%;
+            position: relative;
+            border: 2px solid #333;
+        }
+        
+        .viewer canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        .viewer-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.9);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .viewer-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            min-width: 200px;
+        }
+        
+        .metric-value {
+            font-family: monospace;
+            font-weight: bold;
+        }
+        
+        .fps-good { color: #4CAF50; }
+        .fps-ok { color: #FFC107; }
+        .fps-bad { color: #F44336; }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        #stress-controls {
+            margin-top: 10px;
+        }
+        
+        input[type="range"] {
+            width: 200px;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="viewer1" class="viewer">
+            <div class="viewer-info">
+                <div class="viewer-title">Standard Renderer</div>
+                <div class="metric">
+                    <span>FPS:</span>
+                    <span class="metric-value" id="fps1">0</span>
+                </div>
+                <div class="metric">
+                    <span>Frame Time:</span>
+                    <span class="metric-value" id="frameTime1">0ms</span>
+                </div>
+                <div class="metric">
+                    <span>Morph Updates:</span>
+                    <span class="metric-value" id="morphs1">0</span>
+                </div>
+                <div class="metric">
+                    <span>Draw Calls:</span>
+                    <span class="metric-value" id="draws1">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="viewer2" class="viewer">
+            <div class="viewer-info">
+                <div class="viewer-title">Optimized Renderer</div>
+                <div class="metric">
+                    <span>FPS:</span>
+                    <span class="metric-value" id="fps2">0</span>
+                </div>
+                <div class="metric">
+                    <span>Frame Time:</span>
+                    <span class="metric-value" id="frameTime2">0ms</span>
+                </div>
+                <div class="metric">
+                    <span>Morph Updates:</span>
+                    <span class="metric-value" id="morphs2">0</span>
+                </div>
+                <div class="metric">
+                    <span>Draw Calls:</span>
+                    <span class="metric-value" id="draws2">0</span>
+                </div>
+                <div class="metric">
+                    <span>LOD Level:</span>
+                    <span class="metric-value" id="lod2">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <h3>Performance Comparison Controls</h3>
+        <button onclick="loadBothModels()">Load Models</button>
+        <button onclick="startStressTest()">Start Stress Test</button>
+        <button onclick="stopStressTest()">Stop Stress Test</button>
+        
+        <div id="stress-controls">
+            <label>Animation Intensity: <span id="intensity-value">50</span>%</label><br>
+            <input type="range" id="intensity" min="0" max="100" value="50" 
+                   oninput="updateIntensity(this.value)">
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./three.js/build/three.module.js"
+        }
+    }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        
+        // Global variables
+        let standardViewer = null;
+        let optimizedViewer = null;
+        let stressTestActive = false;
+        let animationIntensity = 0.5;
+        
+        // Viewer class for standard rendering
+        class StandardViewer {
+            constructor(container) {
+                this.container = container;
+                this.morphMeshes = [];
+                this.morphMap = {};
+                this.stats = {
+                    fps: 0,
+                    frameTime: 0,
+                    morphUpdates: 0,
+                    drawCalls: 0,
+                    frameCount: 0,
+                    lastTime: performance.now()
+                };
+                
+                this.init();
+            }
+            
+            init() {
+                // Scene
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x2a2a2a);
+                
+                // Camera
+                this.camera = new THREE.PerspectiveCamera(
+                    45, 
+                    this.container.clientWidth / this.container.clientHeight, 
+                    0.1, 
+                    1000
+                );
+                this.camera.position.set(0, 0, 3);
+                
+                // Renderer - Standard settings
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+                this.renderer.outputEncoding = THREE.sRGBEncoding;
+                this.renderer.shadowMap.enabled = true;
+                this.container.appendChild(this.renderer.domElement);
+                
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight.position.set(1, 1, 1);
+                directionalLight.castShadow = true;
+                this.scene.add(directionalLight);
+                
+                this.animate();
+            }
+            
+            async loadModel(url) {
+                const { GLTFLoader } = await import('./three.js/examples/jsm/loaders/GLTFLoader.js');
+                const loader = new GLTFLoader();
+                
+                const gltf = await loader.loadAsync(url);
+                this.model = gltf.scene;
+                this.model.rotation.x = -Math.PI / 2;
+                
+                // Process morphs
+                this.model.traverse((child) => {
+                    if (child.isMesh && child.morphTargetInfluences) {
+                        this.morphMeshes.push(child);
+                        
+                        // Build morph map
+                        Object.keys(child.morphTargetDictionary || {}).forEach(morphName => {
+                            if (!this.morphMap[morphName]) {
+                                this.morphMap[morphName] = [];
+                            }
+                            this.morphMap[morphName].push({
+                                mesh: child,
+                                index: child.morphTargetDictionary[morphName]
+                            });
+                        });
+                        
+                        // Enable shadows
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                
+                this.scene.add(this.model);
+                
+                // Center model
+                const box = new THREE.Box3().setFromObject(this.model);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const scale = 2 / Math.max(size.x, size.y, size.z);
+                this.model.scale.setScalar(scale);
+                this.model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+            }
+            
+            updateMorphs(morphData) {
+                this.stats.morphUpdates = 0;
+                
+                // Standard approach - update all morphs every frame
+                Object.entries(morphData).forEach(([morphName, value]) => {
+                    if (this.morphMap[morphName]) {
+                        this.morphMap[morphName].forEach(entry => {
+                            entry.mesh.morphTargetInfluences[entry.index] = value;
+                            this.stats.morphUpdates++;
+                        });
+                    }
+                });
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const now = performance.now();
+                const frameTime = now - this.stats.lastTime;
+                
+                // Update stats
+                this.stats.frameTime = frameTime;
+                this.stats.frameCount++;
+                
+                if (now - this.stats.lastTime >= 1000) {
+                    this.stats.fps = this.stats.frameCount;
+                    this.stats.frameCount = 0;
+                    this.stats.lastTime = now;
+                    this.updateUI();
+                }
+                
+                // Get draw calls
+                this.stats.drawCalls = this.renderer.info.render.calls;
+                
+                this.renderer.render(this.scene, this.camera);
+                this.renderer.info.reset();
+            }
+            
+            updateUI() {
+                const fpsEl = document.getElementById('fps1');
+                fpsEl.textContent = this.stats.fps;
+                fpsEl.className = this.stats.fps >= 60 ? 'metric-value fps-good' : 
+                                 this.stats.fps >= 30 ? 'metric-value fps-ok' : 
+                                 'metric-value fps-bad';
+                
+                document.getElementById('frameTime1').textContent = 
+                    this.stats.frameTime.toFixed(1) + 'ms';
+                document.getElementById('morphs1').textContent = this.stats.morphUpdates;
+                document.getElementById('draws1').textContent = this.stats.drawCalls;
+            }
+        }
+        
+        // Viewer class for optimized rendering
+        class OptimizedViewer {
+            constructor(container) {
+                this.container = container;
+                this.morphController = null;
+                this.stats = {
+                    fps: 0,
+                    frameTime: 0,
+                    morphUpdates: 0,
+                    drawCalls: 0,
+                    frameCount: 0,
+                    lastTime: performance.now(),
+                    lodLevel: 0
+                };
+                
+                this.init();
+            }
+            
+            async init() {
+                // Import optimization system
+                const { OptimizedMorphSystem, createOptimizedRenderer } = 
+                    await import('../src/OptimizedMorphSystem.js');
+                
+                // Scene
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x2a2a2a);
+                
+                // Camera
+                this.camera = new THREE.PerspectiveCamera(
+                    45, 
+                    this.container.clientWidth / this.container.clientHeight, 
+                    0.1, 
+                    1000
+                );
+                this.camera.position.set(0, 0, 3);
+                
+                // Optimized Renderer
+                this.renderer = createOptimizedRenderer({
+                    antialias: true,
+                    container: this.container
+                });
+                this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+                this.renderer.outputEncoding = THREE.sRGBEncoding;
+                this.container.appendChild(this.renderer.domElement);
+                
+                // Optimized lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight.position.set(1, 1, 1);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.setScalar(1024); // Optimized shadow map
+                this.scene.add(directionalLight);
+                
+                // Create morph controller
+                this.morphController = new OptimizedMorphSystem({
+                    quality: 'medium',
+                    lodEnabled: true,
+                    selectiveUpdates: true
+                });
+                
+                this.OptimizedMorphSystem = OptimizedMorphSystem;
+                this.animate();
+            }
+            
+            async loadModel(url) {
+                const { GLTFLoader } = await import('./three.js/examples/jsm/loaders/GLTFLoader.js');
+                const loader = new GLTFLoader();
+                
+                const gltf = await loader.loadAsync(url);
+                this.model = gltf.scene;
+                this.model.rotation.x = -Math.PI / 2;
+                
+                // Collect morph meshes
+                const morphMeshes = [];
+                this.model.traverse((child) => {
+                    if (child.isMesh && child.morphTargetInfluences) {
+                        morphMeshes.push(child);
+                    }
+                });
+                
+                // Initialize optimized morph system
+                this.morphController.initialize(morphMeshes);
+                
+                this.scene.add(this.model);
+                
+                // Center model
+                const box = new THREE.Box3().setFromObject(this.model);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const scale = 2 / Math.max(size.x, size.y, size.z);
+                this.model.scale.setScalar(scale);
+                this.model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+            }
+            
+            updateMorphs(morphData) {
+                if (this.morphController) {
+                    this.morphController.updateMorphs(morphData);
+                }
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                const now = performance.now();
+                const frameTime = now - this.stats.lastTime;
+                
+                // Update LOD
+                if (this.morphController && this.model) {
+                    const distance = this.camera.position.distanceTo(this.model.position);
+                    this.stats.lodLevel = this.morphController.updateLOD(distance);
+                    
+                    // Tick morph system
+                    this.morphController.tick(frameTime);
+                    
+                    // Get morph stats
+                    const morphStats = this.morphController.getStats();
+                    this.stats.morphUpdates = morphStats.morphUpdatesPerFrame;
+                }
+                
+                // Update stats
+                this.stats.frameTime = frameTime;
+                this.stats.frameCount++;
+                
+                if (now - this.stats.lastTime >= 1000) {
+                    this.stats.fps = this.stats.frameCount;
+                    this.stats.frameCount = 0;
+                    this.stats.lastTime = now;
+                    this.updateUI();
+                }
+                
+                // Get draw calls
+                this.stats.drawCalls = this.renderer.info.render.calls;
+                
+                this.renderer.render(this.scene, this.camera);
+                this.renderer.info.reset();
+            }
+            
+            updateUI() {
+                const fpsEl = document.getElementById('fps2');
+                fpsEl.textContent = this.stats.fps;
+                fpsEl.className = this.stats.fps >= 60 ? 'metric-value fps-good' : 
+                                 this.stats.fps >= 30 ? 'metric-value fps-ok' : 
+                                 'metric-value fps-bad';
+                
+                document.getElementById('frameTime2').textContent = 
+                    this.stats.frameTime.toFixed(1) + 'ms';
+                document.getElementById('morphs2').textContent = this.stats.morphUpdates;
+                document.getElementById('draws2').textContent = this.stats.drawCalls;
+                document.getElementById('lod2').textContent = this.stats.lodLevel;
+            }
+        }
+        
+        // Initialize viewers
+        window.onload = () => {
+            standardViewer = new StandardViewer(document.getElementById('viewer1'));
+            optimizedViewer = new OptimizedViewer(document.getElementById('viewer2'));
+        };
+        
+        // Load models in both viewers
+        window.loadBothModels = async () => {
+            const modelUrl = 'camila-head-only.glb';
+            
+            try {
+                await Promise.all([
+                    standardViewer.loadModel(modelUrl),
+                    optimizedViewer.loadModel(modelUrl)
+                ]);
+                console.log('Models loaded successfully');
+            } catch (error) {
+                console.error('Error loading models:', error);
+            }
+        };
+        
+        // Stress test functions
+        window.startStressTest = () => {
+            stressTestActive = true;
+            runStressTest();
+        };
+        
+        window.stopStressTest = () => {
+            stressTestActive = false;
+        };
+        
+        window.updateIntensity = (value) => {
+            animationIntensity = value / 100;
+            document.getElementById('intensity-value').textContent = value;
+        };
+        
+        function runStressTest() {
+            if (!stressTestActive) return;
+            
+            // Generate random morph data
+            const morphData = {};
+            const morphCount = Math.floor(266 * animationIntensity);
+            
+            // Common morph names
+            const morphNames = [
+                'V_Open', 'V_AA', 'V_EE', 'V_OH', 'V_U',
+                'Eye_Blink_L', 'Eye_Blink_R',
+                'Mouth_Smile_L', 'Mouth_Smile_R',
+                'Brow_Raise_L', 'Brow_Raise_R',
+                'Eye_Wide_L', 'Eye_Wide_R',
+                'Mouth_Frown_L', 'Mouth_Frown_R'
+            ];
+            
+            // Add random morphs
+            for (let i = 0; i < morphCount; i++) {
+                const morphName = morphNames[i % morphNames.length] + '_' + Math.floor(i / morphNames.length);
+                morphData[morphName] = Math.random();
+            }
+            
+            // Update both viewers
+            if (standardViewer) standardViewer.updateMorphs(morphData);
+            if (optimizedViewer) optimizedViewer.updateMorphs(morphData);
+            
+            // Continue stress test
+            requestAnimationFrame(runStressTest);
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (standardViewer) {
+                standardViewer.camera.aspect = standardViewer.container.clientWidth / standardViewer.container.clientHeight;
+                standardViewer.camera.updateProjectionMatrix();
+                standardViewer.renderer.setSize(standardViewer.container.clientWidth, standardViewer.container.clientHeight);
+            }
+            
+            if (optimizedViewer) {
+                optimizedViewer.camera.aspect = optimizedViewer.container.clientWidth / optimizedViewer.container.clientHeight;
+                optimizedViewer.camera.updateProjectionMatrix();
+                optimizedViewer.renderer.setSize(optimizedViewer.container.clientWidth, optimizedViewer.container.clientHeight);
+            }
+        });
+    </script>
+</body>
+</html>

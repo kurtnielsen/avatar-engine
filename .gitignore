@@ -20,3 +20,32 @@ Thumbs.db
 # Project specific
 audits/*/artifacts/*.json
 *.db
+*.sqlite
+uploads/
+tmp/
+cache/
+.chroma/
+models/
+checkpoints/
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+coverage.xml
+
+# Performance data
+benchmarks/results/
+*.prof
+
+# Avatar models (large files)
+*.glb
+*.gltf
+*.fbx
+*.obj
+
+# Audio/Video files
+*.wav
+*.mp3
+*.mp4
+*.webm

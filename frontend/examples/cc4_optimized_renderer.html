@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CC4 Optimized Renderer - 60+ FPS Performance</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+        }
+        
+        #status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background: #333;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        
+        .success { background: #1b5e20; }
+        .error { background: #b71c1c; }
+        .warning { background: #e65100; }
+        .info { background: #0277bd; }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        #performance {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 12px;
+            font-family: monospace;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 4px;
+            min-width: 250px;
+        }
+        
+        #performance .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        
+        #qualitySettings {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 4px;
+        }
+        
+        .quality-option {
+            margin: 5px 0;
+        }
+        
+        .quality-option input[type="radio"] {
+            margin-right: 10px;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .optimization-toggle {
+            margin: 10px 0;
+        }
+        
+        .optimization-toggle label {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        
+        .optimization-toggle input[type="checkbox"] {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    
+    <div id="info">
+        <h2>CC4 Optimized Renderer</h2>
+        <div id="status">Ready to load...</div>
+        
+        <button onclick="window.loadOptimizedModel()">Load CC4 Model</button>
+        <button onclick="window.resetCamera()">Reset Camera</button>
+        <button onclick="window.testPerformance()">Test Performance</button>
+        <button onclick="window.connectWebSocket()">Connect WebSocket</button>
+        
+        <div id="qualitySettings">
+            <h4>Quality Settings</h4>
+            <div class="quality-option">
+                <label>
+                    <input type="radio" name="quality" value="low" onchange="window.setQuality('low')">
+                    Low (Best Performance)
+                </label>
+            </div>
+            <div class="quality-option">
+                <label>
+                    <input type="radio" name="quality" value="medium" onchange="window.setQuality('medium')" checked>
+                    Medium (Balanced)
+                </label>
+            </div>
+            <div class="quality-option">
+                <label>
+                    <input type="radio" name="quality" value="high" onchange="window.setQuality('high')">
+                    High (Best Quality)
+                </label>
+            </div>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <h4>Optimizations</h4>
+            <div class="optimization-toggle">
+                <label>
+                    <input type="checkbox" id="lodEnabled" checked onchange="window.toggleLOD()">
+                    LOD System
+                </label>
+            </div>
+            <div class="optimization-toggle">
+                <label>
+                    <input type="checkbox" id="selectiveUpdates" checked onchange="window.toggleSelectiveUpdates()">
+                    Selective Morph Updates
+                </label>
+            </div>
+            <div class="optimization-toggle">
+                <label>
+                    <input type="checkbox" id="frustumCulling" checked onchange="window.toggleFrustumCulling()">
+                    Frustum Culling
+                </label>
+            </div>
+            <div class="optimization-toggle">
+                <label>
+                    <input type="checkbox" id="gpuMorphing" checked onchange="window.toggleGPUMorphing()">
+                    GPU Morphing
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div id="performance">
+        <h4>Performance Metrics</h4>
+        <div class="metric">
+            <span>FPS:</span>
+            <span id="fps">0</span>
+        </div>
+        <div class="metric">
+            <span>Frame Time:</span>
+            <span id="frameTime">0ms</span>
+        </div>
+        <div class="metric">
+            <span>Draw Calls:</span>
+            <span id="drawCalls">0</span>
+        </div>
+        <div class="metric">
+            <span>Triangles:</span>
+            <span id="triangles">0</span>
+        </div>
+        <div class="metric">
+            <span>Active Morphs:</span>
+            <span id="activeMorphs">0</span>
+        </div>
+        <div class="metric">
+            <span>Morph Updates/Frame:</span>
+            <span id="morphUpdates">0</span>
+        </div>
+        <div class="metric">
+            <span>LOD Level:</span>
+            <span id="lodLevel">N/A</span>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <strong>Camera Controls:</strong><br>
+        🖱️ Left Click + Drag: Rotate<br>
+        🖱️ Right Click + Drag: Pan<br>
+        🖱️ Scroll: Zoom<br>
+        🔄 Double Click: Reset View
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./three.js/build/three.module.js"
+        }
+    }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        
+        let scene, camera, renderer;
+        let model, modelContainer;
+        let controls;
+        let ws = null;
+        
+        // Performance monitoring
+        let stats = {
+            fps: 0,
+            frameTime: 0,
+            drawCalls: 0,
+            triangles: 0,
+            activeMorphs: 0,
+            morphUpdates: 0,
+            frameCount: 0,
+            lastTime: performance.now()
+        };
+        
+        // Optimization settings
+        const optimizationSettings = {
+            lodEnabled: true,
+            selectiveUpdates: true,
+            frustumCulling: true,
+            gpuMorphing: true,
+            quality: 'medium'
+        };
+        
+        // Quality presets
+        const qualityPresets = {
+            low: {
+                shadowMapSize: 512,
+                antialias: false,
+                morphUpdateThreshold: 0.05,
+                maxActiveMorphs: 50,
+                lodDistances: [2, 5, 10],
+                updateFrequency: 3 // Update every 3 frames
+            },
+            medium: {
+                shadowMapSize: 1024,
+                antialias: true,
+                morphUpdateThreshold: 0.01,
+                maxActiveMorphs: 100,
+                lodDistances: [3, 8, 15],
+                updateFrequency: 2 // Update every 2 frames
+            },
+            high: {
+                shadowMapSize: 2048,
+                antialias: true,
+                morphUpdateThreshold: 0.001,
+                maxActiveMorphs: 266,
+                lodDistances: [5, 12, 20],
+                updateFrequency: 1 // Update every frame
+            }
+        };
+        
+        class OptimizedMorphController {
+            constructor(meshes) {
+                this.meshes = meshes;
+                this.morphMap = {};
+                this.morphStates = {}; // Track current values
+                this.dirtyMorphs = new Set(); // Track changed morphs
+                this.lodLevel = 0;
+                this.frameCounter = 0;
+                this.activeMorphCount = 0;
+                
+                // Priority morphs that always update
+                this.priorityMorphs = new Set([
+                    'V_Open', 'V_AA', 'V_EE', 'V_OH', 'V_U',
+                    'Eye_Blink_L', 'Eye_Blink_R',
+                    'Mouth_Smile_L', 'Mouth_Smile_R'
+                ]);
+                
+                this.buildUnifiedMorphDict();
+                this.initializeMorphStates();
+            }
+            
+            buildUnifiedMorphDict() {
+                this.meshes.forEach((mesh, meshIndex) => {
+                    if (mesh.morphTargetDictionary) {
+                        Object.keys(mesh.morphTargetDictionary).forEach(morphName => {
+                            if (!this.morphMap[morphName]) {
+                                this.morphMap[morphName] = [];
+                            }
+                            this.morphMap[morphName].push({
+                                mesh: mesh,
+                                meshIndex: meshIndex,
+                                morphIndex: mesh.morphTargetDictionary[morphName]
+                            });
+                        });
+                    }
+                });
+                console.log(`Unified morph map: ${Object.keys(this.morphMap).length} unique morphs`);
+            }
+            
+            initializeMorphStates() {
+                Object.keys(this.morphMap).forEach(morphName => {
+                    this.morphStates[morphName] = 0;
+                });
+            }
+            
+            setMorph(morphName, value, force = false) {
+                if (!this.morphMap[morphName]) return false;
+                
+                const currentPreset = qualityPresets[optimizationSettings.quality];
+                const threshold = currentPreset.morphUpdateThreshold;
+                
+                // Check if update is needed
+                const currentValue = this.morphStates[morphName] || 0;
+                const delta = Math.abs(value - currentValue);
+                
+                if (!force && optimizationSettings.selectiveUpdates) {
+                    // Skip if change is below threshold
+                    if (delta < threshold) return false;
+                    
+                    // Skip non-priority morphs if we're over the limit
+                    if (this.activeMorphCount >= currentPreset.maxActiveMorphs && 
+                        !this.priorityMorphs.has(morphName) && 
+                        value > 0) {
+                        return false;
+                    }
+                }
+                
+                // Update state
+                this.morphStates[morphName] = value;
+                this.dirtyMorphs.add(morphName);
+                
+                // Apply based on LOD and frame rate
+                if (this.shouldUpdateMorph(morphName)) {
+                    this.applyMorph(morphName, value);
+                }
+                
+                return true;
+            }
+            
+            shouldUpdateMorph(morphName) {
+                const currentPreset = qualityPresets[optimizationSettings.quality];
+                
+                // Always update priority morphs
+                if (this.priorityMorphs.has(morphName)) return true;
+                
+                // Frame-based updates for non-priority morphs
+                if (this.frameCounter % currentPreset.updateFrequency !== 0) {
+                    return false;
+                }
+                
+                // LOD-based filtering
+                if (optimizationSettings.lodEnabled && this.lodLevel > 1) {
+                    // At far distances, only update visemes and expressions
+                    return this.priorityMorphs.has(morphName);
+                }
+                
+                return true;
+            }
+            
+            applyMorph(morphName, value) {
+                this.morphMap[morphName].forEach(entry => {
+                    // GPU morphing optimization
+                    if (optimizationSettings.gpuMorphing && entry.mesh.material) {
+                        entry.mesh.material.morphTargets = true;
+                        entry.mesh.material.morphNormals = value > 0.1; // Only update normals for significant changes
+                    }
+                    
+                    entry.mesh.morphTargetInfluences[entry.morphIndex] = value;
+                });
+                
+                stats.morphUpdates++;
+            }
+            
+            updateMorphs(morphData) {
+                // Batch updates
+                const updates = [];
+                Object.entries(morphData).forEach(([morphName, value]) => {
+                    if (this.setMorph(morphName, value)) {
+                        updates.push(morphName);
+                    }
+                });
+                
+                // Update active morph count
+                this.activeMorphCount = Object.values(this.morphStates)
+                    .filter(v => v > 0.001).length;
+                
+                return updates.length;
+            }
+            
+            processDirtyMorphs() {
+                if (!optimizationSettings.selectiveUpdates) {
+                    // Apply all morphs if selective updates are disabled
+                    Object.entries(this.morphStates).forEach(([morphName, value]) => {
+                        this.applyMorph(morphName, value);
+                    });
+                } else {
+                    // Only apply dirty morphs
+                    this.dirtyMorphs.forEach(morphName => {
+                        const value = this.morphStates[morphName];
+                        this.applyMorph(morphName, value);
+                    });
+                    this.dirtyMorphs.clear();
+                }
+            }
+            
+            updateLOD(distance) {
+                const lodDistances = qualityPresets[optimizationSettings.quality].lodDistances;
+                
+                if (distance < lodDistances[0]) {
+                    this.lodLevel = 0; // Full detail
+                } else if (distance < lodDistances[1]) {
+                    this.lodLevel = 1; // Medium detail
+                } else if (distance < lodDistances[2]) {
+                    this.lodLevel = 2; // Low detail
+                } else {
+                    this.lodLevel = 3; // Very low detail
+                }
+                
+                return this.lodLevel;
+            }
+            
+            resetAll() {
+                Object.keys(this.morphStates).forEach(morphName => {
+                    this.morphStates[morphName] = 0;
+                });
+                this.dirtyMorphs.clear();
+                
+                this.meshes.forEach(mesh => {
+                    if (mesh.morphTargetInfluences) {
+                        mesh.morphTargetInfluences.fill(0);
+                    }
+                });
+                
+                this.activeMorphCount = 0;
+            }
+            
+            tick() {
+                this.frameCounter++;
+                this.processDirtyMorphs();
+            }
+        }
+        
+        let morphController = null;
+        
+        function updateStatus(msg, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = msg;
+            status.className = type;
+            console.log(`[${type}] ${msg}`);
+        }
+        
+        async function init() {
+            updateStatus('Initializing optimized Three.js scene...');
+            
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+            
+            // Model container
+            modelContainer = new THREE.Group();
+            scene.add(modelContainer);
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 3);
+            camera.lookAt(0, 0, 0);
+            
+            // Optimized Renderer
+            const currentPreset = qualityPresets[optimizationSettings.quality];
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: currentPreset.antialias,
+                powerPreference: "high-performance",
+                stencil: false, // Disable if not needed
+                depth: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.shadowMap.autoUpdate = false; // Manual shadow updates
+            
+            // Enable renderer info
+            renderer.info.autoReset = false;
+            
+            document.getElementById('container').appendChild(renderer.domElement);
+            
+            // Optimized Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const keyLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            keyLight.position.set(1, 1, 2);
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.width = currentPreset.shadowMapSize;
+            keyLight.shadow.mapSize.height = currentPreset.shadowMapSize;
+            keyLight.shadow.camera.near = 0.1;
+            keyLight.shadow.camera.far = 10;
+            scene.add(keyLight);
+            
+            const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+            fillLight.position.set(-1, 0, 1);
+            scene.add(fillLight);
+            
+            // Load OrbitControls
+            try {
+                const { OrbitControls } = await import('./three.js/examples/jsm/controls/OrbitControls.js');
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.target.set(0, 0, 0);
+                controls.minDistance = 1;
+                controls.maxDistance = 10;
+                controls.enablePan = true;
+                controls.panSpeed = 0.8;
+                
+                renderer.domElement.addEventListener('dblclick', () => {
+                    controls.reset();
+                });
+            } catch (e) {
+                console.warn('OrbitControls not loaded:', e);
+            }
+            
+            updateStatus('Optimized scene ready. Click "Load CC4 Model"', 'success');
+            animate();
+        }
+        
+        window.resetCamera = function() {
+            if (controls) {
+                controls.reset();
+            }
+            camera.position.set(0, 0, 3);
+            camera.lookAt(0, 0, 0);
+        };
+        
+        window.loadOptimizedModel = async function() {
+            try {
+                const { GLTFLoader } = await import('./three.js/examples/jsm/loaders/GLTFLoader.js');
+                
+                updateStatus('Loading CC4 model with optimizations...', 'warning');
+                
+                const loader = new GLTFLoader();
+                
+                loader.load(
+                    'camila-head-only.glb',
+                    function(gltf) {
+                        console.log('GLTF Loaded:', gltf);
+                        
+                        if (model) {
+                            modelContainer.remove(model);
+                        }
+                        
+                        model = gltf.scene;
+                        
+                        // Fix orientation
+                        model.rotation.x = -Math.PI / 2;
+                        
+                        modelContainer.add(model);
+                        
+                        const morphMeshes = [];
+                        let totalTriangles = 0;
+                        
+                        // Process and optimize meshes
+                        model.traverse((child) => {
+                            if (child.isMesh) {
+                                // Count triangles
+                                if (child.geometry) {
+                                    const positionAttribute = child.geometry.attributes.position;
+                                    if (positionAttribute) {
+                                        totalTriangles += positionAttribute.count / 3;
+                                    }
+                                }
+                                
+                                if (child.morphTargetInfluences && child.morphTargetInfluences.length > 0) {
+                                    morphMeshes.push(child);
+                                    
+                                    // Optimize material
+                                    if (child.material) {
+                                        child.material = child.material.clone();
+                                        child.material.morphTargets = true;
+                                        child.material.morphNormals = true;
+                                        
+                                        // Additional optimizations based on quality
+                                        if (optimizationSettings.quality === 'low') {
+                                            child.material.flatShading = true;
+                                            child.material.vertexColors = false;
+                                        }
+                                        
+                                        child.material.needsUpdate = true;
+                                    }
+                                    
+                                    // Enable frustum culling
+                                    child.frustumCulled = optimizationSettings.frustumCulling;
+                                    
+                                    // Enable shadows based on quality
+                                    child.castShadow = optimizationSettings.quality !== 'low';
+                                    child.receiveShadow = optimizationSettings.quality !== 'low';
+                                }
+                            }
+                        });
+                        
+                        // Create optimized controller
+                        morphController = new OptimizedMorphController(morphMeshes);
+                        
+                        // Center and scale
+                        const box = new THREE.Box3().setFromObject(model);
+                        const center = box.getCenter(new THREE.Vector3());
+                        const size = box.getSize(new THREE.Vector3());
+                        
+                        const maxDim = Math.max(size.x, size.y, size.z);
+                        const scale = 2 / maxDim;
+                        modelContainer.scale.setScalar(scale);
+                        
+                        modelContainer.position.y = -center.y * scale;
+                        modelContainer.position.x = -center.x * scale;
+                        modelContainer.position.z = -center.z * scale;
+                        
+                        if (controls) {
+                            controls.target.set(0, 0, 0);
+                            controls.update();
+                        }
+                        
+                        updateStatus(`Model loaded! Triangles: ${totalTriangles.toLocaleString()}`, 'success');
+                        
+                        // Initial shadow render
+                        renderer.shadowMap.needsUpdate = true;
+                    },
+                    function(xhr) {
+                        if (xhr.lengthComputable) {
+                            const percent = (xhr.loaded / xhr.total * 100).toFixed(1);
+                            updateStatus(`Loading: ${percent}%`, 'warning');
+                        }
+                    },
+                    function(error) {
+                        updateStatus(`Error: ${error.message}`, 'error');
+                        console.error(error);
+                    }
+                );
+            } catch (error) {
+                updateStatus(`Module error: ${error.message}`, 'error');
+            }
+        };
+        
+        window.setQuality = function(quality) {
+            optimizationSettings.quality = quality;
+            const preset = qualityPresets[quality];
+            
+            // Update renderer
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality === 'low' ? 1 : 2));
+            
+            // Update shadows
+            renderer.shadowMap.enabled = quality !== 'low';
+            if (renderer.shadowMap.enabled) {
+                scene.traverse((obj) => {
+                    if (obj.isDirectionalLight && obj.shadow) {
+                        obj.shadow.mapSize.setScalar(preset.shadowMapSize);
+                    }
+                });
+                renderer.shadowMap.needsUpdate = true;
+            }
+            
+            // Update materials
+            if (model) {
+                model.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        child.material.flatShading = quality === 'low';
+                        child.material.needsUpdate = true;
+                        child.castShadow = quality !== 'low';
+                        child.receiveShadow = quality !== 'low';
+                    }
+                });
+            }
+            
+            updateStatus(`Quality set to: ${quality}`, 'info');
+        };
+        
+        window.toggleLOD = function() {
+            optimizationSettings.lodEnabled = document.getElementById('lodEnabled').checked;
+        };
+        
+        window.toggleSelectiveUpdates = function() {
+            optimizationSettings.selectiveUpdates = document.getElementById('selectiveUpdates').checked;
+        };
+        
+        window.toggleFrustumCulling = function() {
+            optimizationSettings.frustumCulling = document.getElementById('frustumCulling').checked;
+            if (model) {
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        child.frustumCulled = optimizationSettings.frustumCulling;
+                    }
+                });
+            }
+        };
+        
+        window.toggleGPUMorphing = function() {
+            optimizationSettings.gpuMorphing = document.getElementById('gpuMorphing').checked;
+        };
+        
+        window.testPerformance = function() {
+            if (!morphController) {
+                updateStatus('Load model first!', 'error');
+                return;
+            }
+            
+            updateStatus('Running performance test...', 'warning');
+            
+            // Stress test with random morphs
+            const morphNames = Object.keys(morphController.morphMap);
+            const testDuration = 5000; // 5 seconds
+            const startTime = performance.now();
+            
+            const stressTest = () => {
+                const elapsed = performance.now() - startTime;
+                if (elapsed < testDuration) {
+                    // Update 50 random morphs
+                    for (let i = 0; i < 50; i++) {
+                        const morphName = morphNames[Math.floor(Math.random() * morphNames.length)];
+                        const value = Math.random();
+                        morphController.setMorph(morphName, value);
+                    }
+                    requestAnimationFrame(stressTest);
+                } else {
+                    morphController.resetAll();
+                    updateStatus('Performance test complete!', 'success');
+                }
+            };
+            
+            stressTest();
+        };
+        
+        window.connectWebSocket = function() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+                updateStatus('WebSocket disconnected');
+                return;
+            }
+            
+            ws = new WebSocket('ws://localhost:8765');
+            
+            ws.onopen = () => {
+                updateStatus('WebSocket connected!', 'success');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    
+                    if (message.type === 'blendshape_update' && morphController) {
+                        const updatedCount = morphController.updateMorphs(message.data);
+                        stats.activeMorphs = morphController.activeMorphCount;
+                    }
+                } catch (e) {
+                    console.error('WebSocket parse error:', e);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                updateStatus('WebSocket error', 'error');
+                console.error('WebSocket error:', error);
+            };
+            
+            ws.onclose = () => {
+                updateStatus('WebSocket disconnected');
+                ws = null;
+            };
+        };
+        
+        function updatePerformanceMetrics() {
+            const now = performance.now();
+            const delta = now - stats.lastTime;
+            
+            stats.frameCount++;
+            
+            // Update FPS every second
+            if (delta >= 1000) {
+                stats.fps = Math.round((stats.frameCount * 1000) / delta);
+                stats.frameCount = 0;
+                stats.lastTime = now;
+            }
+            
+            // Update metrics display
+            stats.frameTime = delta.toFixed(1);
+            
+            if (renderer.info) {
+                stats.drawCalls = renderer.info.render.calls;
+                stats.triangles = renderer.info.render.triangles;
+            }
+            
+            // Update UI
+            document.getElementById('fps').textContent = stats.fps;
+            document.getElementById('frameTime').textContent = stats.frameTime + 'ms';
+            document.getElementById('drawCalls').textContent = stats.drawCalls;
+            document.getElementById('triangles').textContent = stats.triangles.toLocaleString();
+            document.getElementById('activeMorphs').textContent = morphController ? morphController.activeMorphCount : 0;
+            document.getElementById('morphUpdates').textContent = stats.morphUpdates;
+            document.getElementById('lodLevel').textContent = morphController ? morphController.lodLevel : 'N/A';
+            
+            // Reset per-frame counters
+            stats.morphUpdates = 0;
+            renderer.info.reset();
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update LOD based on camera distance
+            if (morphController && model && optimizationSettings.lodEnabled) {
+                const distance = camera.position.distanceTo(modelContainer.position);
+                morphController.updateLOD(distance);
+            }
+            
+            // Update morph controller
+            if (morphController) {
+                morphController.tick();
+            }
+            
+            if (controls) {
+                controls.update();
+            }
+            
+            // Update performance metrics
+            updatePerformanceMetrics();
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Initialize
+        init();
+    </script>
+</body>
+</html>

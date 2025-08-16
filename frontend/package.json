@@ -1,0 +1,33 @@
+{
+  "name": "@neureval/avatar-engine-frontend",
+  "version": "1.0.0",
+  "description": "Real-time facial animation engine frontend",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "socket.io-client": "^4.7.0",
+    "msgpack-lite": "^0.1.26"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0",
+    "eslint": "^8.54.0",
+    "@types/three": "^0.160.0"
+  },
+  "keywords": [
+    "avatar",
+    "facial-animation",
+    "threejs",
+    "webrtc",
+    "real-time"
+  ],
+  "author": "NeurEval",
+  "license": "MIT"
+}

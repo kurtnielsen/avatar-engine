@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CC4 Avatar Viewer - Advanced</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 5px;
+            max-width: 400px;
+        }
+        
+        #debug {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            font-family: monospace;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 600px;
+        }
+        
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .warning { color: #ff9800; }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 80vh;
+            overflow-y: auto;
+            width: 300px;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        .slider-container {
+            margin: 10px 0;
+        }
+        
+        .slider-label {
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 5px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: #333;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #4CAF50;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    
+    <div id="info">
+        <h3>CC4 Avatar Viewer</h3>
+        <p id="status">Initializing...</p>
+        <button onclick="loadFullBody()">Load Full Body (108MB)</button>
+        <button onclick="loadHead()">Load Head Only (59MB)</button>
+        <button onclick="connectWebSocket()">Connect WebSocket</button>
+    </div>
+    
+    <div id="controls" style="display: none;">
+        <h4>Test Controls</h4>
+        <div id="sliders"></div>
+    </div>
+    
+    <div id="debug"></div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        let scene, camera, renderer;
+        let model, morphMesh;
+        let ws = null;
+        
+        function log(msg, type = '') {
+            const debug = document.getElementById('debug');
+            const time = new Date().toTimeString().split(' ')[0];
+            const className = type ? ` class="${type}"` : '';
+            debug.innerHTML += `<div${className}>[${time}] ${msg}</div>`;
+            debug.scrollTop = debug.scrollHeight;
+            console.log(msg);
+        }
+        
+        function updateStatus(msg, type = '') {
+            const status = document.getElementById('status');
+            status.textContent = msg;
+            status.className = type;
+        }
+        
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1, 2);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.getElementById('container').appendChild(renderer.domElement);
+            
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+            
+            // Controls
+            if (window.THREE.OrbitControls) {
+                const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+            }
+            
+            // Load OrbitControls
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js';
+            script.onload = () => {
+                log('OrbitControls loaded', 'success');
+                window.controls = new THREE.OrbitControls(camera, renderer.domElement);
+                window.controls.enableDamping = true;
+                window.controls.dampingFactor = 0.05;
+            };
+            document.head.appendChild(script);
+            
+            // Load GLTFLoader
+            const gltfScript = document.createElement('script');
+            gltfScript.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+            gltfScript.onload = () => {
+                log('GLTFLoader ready', 'success');
+                updateStatus('Ready to load model');
+            };
+            gltfScript.onerror = () => {
+                log('Failed to load GLTFLoader!', 'error');
+            };
+            document.head.appendChild(gltfScript);
+            
+            // Animation loop
+            animate();
+            
+            // Resize handler
+            window.addEventListener('resize', onWindowResize);
+        }
+        
+        function loadModel(filename, isHead = false) {
+            if (!window.THREE.GLTFLoader) {
+                alert('GLTFLoader not ready yet. Please wait a moment and try again.');
+                return;
+            }
+            
+            updateStatus(`Loading ${filename}...`, 'warning');
+            log(`Starting load of ${filename}`);
+            
+            const loader = new THREE.GLTFLoader();
+            const startTime = Date.now();
+            
+            // Clear previous model
+            if (model) {
+                scene.remove(model);
+                model = null;
+                morphMesh = null;
+            }
+            
+            loader.load(
+                filename,
+                // Success
+                function(gltf) {
+                    const loadTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                    log(`Model loaded in ${loadTime}s`, 'success');
+                    
+                    model = gltf.scene;
+                    scene.add(model);
+                    
+                    // Analyze model structure
+                    let meshCount = 0;
+                    let morphTargetCount = 0;
+                    let foundMorphMesh = false;
+                    
+                    model.traverse((child) => {
+                        if (child.isMesh) {
+                            meshCount++;
+                            log(`Found mesh: ${child.name || 'unnamed'}`);
+                            
+                            // Check for morph targets
+                            if (child.geometry && child.geometry.morphAttributes && child.geometry.morphAttributes.position) {
+                                const morphCount = child.geometry.morphAttributes.position.length;
+                                log(`  - Has ${morphCount} morph targets`, 'success');
+                                morphTargetCount += morphCount;
+                                
+                                // Check if morphTargetInfluences exists
+                                if (!child.morphTargetInfluences) {
+                                    log(`  - Creating morphTargetInfluences array`, 'warning');
+                                    child.morphTargetInfluences = new Array(morphCount).fill(0);
+                                }
+                                
+                                // Check morphTargetDictionary
+                                if (child.morphTargetDictionary) {
+                                    const names = Object.keys(child.morphTargetDictionary);
+                                    log(`  - Morph target names: ${names.slice(0, 5).join(', ')}...`);
+                                    
+                                    if (!foundMorphMesh) {
+                                        morphMesh = child;
+                                        foundMorphMesh = true;
+                                        createControls(child.morphTargetDictionary);
+                                    }
+                                } else {
+                                    log(`  - No morphTargetDictionary found`, 'warning');
+                                }
+                                
+                                // Try to update morph targets
+                                try {
+                                    if (child.updateMorphTargets) {
+                                        child.updateMorphTargets();
+                                        log(`  - Updated morph targets`, 'success');
+                                    }
+                                } catch (e) {
+                                    log(`  - Error updating morph targets: ${e.message}`, 'error');
+                                }
+                            }
+                            
+                            // Check material
+                            if (child.material) {
+                                log(`  - Material: ${child.material.type}`);
+                                // Ensure material can handle morph targets
+                                if (child.material.morphTargets !== undefined) {
+                                    child.material.morphTargets = true;
+                                }
+                                if (child.material.morphNormals !== undefined) {
+                                    child.material.morphNormals = true;
+                                }
+                            }
+                        }
+                    });
+                    
+                    log(`Total meshes: ${meshCount}, Total morph targets: ${morphTargetCount}`);
+                    
+                    // Center and scale model
+                    const box = new THREE.Box3().setFromObject(model);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = 2 / maxDim;
+                    model.scale.multiplyScalar(scale);
+                    
+                    model.position.sub(center.multiplyScalar(scale));
+                    if (isHead) {
+                        model.position.y += 0.5;
+                    }
+                    
+                    // Update camera
+                    camera.position.set(0, isHead ? 1.5 : 1, 2.5);
+                    if (window.controls) {
+                        window.controls.target.set(0, isHead ? 1 : 0.5, 0);
+                        window.controls.update();
+                    }
+                    
+                    updateStatus(`Model loaded: ${meshCount} meshes, ${morphTargetCount} morph targets`, 'success');
+                    
+                    if (morphTargetCount === 0) {
+                        log('WARNING: No morph targets found in model!', 'error');
+                        log('Make sure to export morph targets/shape keys from Blender', 'warning');
+                    }
+                },
+                // Progress
+                function(xhr) {
+                    if (xhr.total) {
+                        const percent = (xhr.loaded / xhr.total * 100).toFixed(1);
+                        const mb = (xhr.loaded / 1024 / 1024).toFixed(1);
+                        updateStatus(`Loading: ${percent}% (${mb}MB)`, 'warning');
+                    }
+                },
+                // Error
+                function(error) {
+                    log(`Load error: ${error.message || error}`, 'error');
+                    updateStatus(`Error: ${error.message || 'Failed to load'}`, 'error');
+                    
+                    // Try to get more error details
+                    if (error.target && error.target.status) {
+                        log(`HTTP Status: ${error.target.status}`, 'error');
+                    }
+                }
+            );
+        }
+        
+        function createControls(morphDict) {
+            const container = document.getElementById('sliders');
+            container.innerHTML = '';
+            document.getElementById('controls').style.display = 'block';
+            
+            // Key ARKit shapes to test
+            const keyShapes = [
+                'eyeBlinkLeft', 'eyeBlinkRight', 'jawOpen',
+                'mouthSmileLeft', 'mouthSmileRight', 'browInnerUp'
+            ];
+            
+            // First, add controls for known ARKit shapes if they exist
+            keyShapes.forEach(name => {
+                if (morphDict[name] !== undefined) {
+                    createSlider(container, name, morphDict[name]);
+                }
+            });
+            
+            // Then add first 10 other shapes
+            let count = 0;
+            Object.keys(morphDict).forEach(name => {
+                if (!keyShapes.includes(name) && count < 10) {
+                    createSlider(container, name, morphDict[name]);
+                    count++;
+                }
+            });
+        }
+        
+        function createSlider(container, name, index) {
+            const div = document.createElement('div');
+            div.className = 'slider-container';
+            
+            const label = document.createElement('div');
+            label.className = 'slider-label';
+            label.innerHTML = `<span>${name}</span><span id="${name}-value">0.00</span>`;
+            
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.min = 0;
+            slider.max = 1;
+            slider.step = 0.01;
+            slider.value = 0;
+            
+            slider.oninput = function() {
+                const value = parseFloat(this.value);
+                document.getElementById(`${name}-value`).textContent = value.toFixed(2);
+                
+                if (morphMesh && morphMesh.morphTargetInfluences) {
+                    morphMesh.morphTargetInfluences[index] = value;
+                }
+            };
+            
+            div.appendChild(label);
+            div.appendChild(slider);
+            container.appendChild(div);
+        }
+        
+        function loadFullBody() {
+            loadModel('avatarARKitTest.glb', false);
+        }
+        
+        function loadHead() {
+            loadModel('avatarARKitTestHead.glb', true);
+        }
+        
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+                return;
+            }
+            
+            ws = new WebSocket('ws://localhost:8765');
+            
+            ws.onopen = () => {
+                log('WebSocket connected', 'success');
+                updateStatus('WebSocket connected', 'success');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    if (message.type === 'blendshape_update' && morphMesh) {
+                        Object.keys(message.data).forEach(name => {
+                            const index = morphMesh.morphTargetDictionary[name];
+                            if (index !== undefined) {
+                                morphMesh.morphTargetInfluences[index] = message.data[name];
+                            }
+                        });
+                    }
+                } catch (e) {
+                    log(`WebSocket parse error: ${e.message}`, 'error');
+                }
+            };
+            
+            ws.onerror = (error) => {
+                log('WebSocket error', 'error');
+            };
+            
+            ws.onclose = () => {
+                log('WebSocket disconnected', 'warning');
+                updateStatus('WebSocket disconnected');
+            };
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (window.controls) {
+                window.controls.update();
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Initialize
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
